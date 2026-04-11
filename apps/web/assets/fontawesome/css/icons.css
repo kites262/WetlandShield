@@ -1,0 +1,80 @@
+@font-face {
+  font-family: 'Font Awesome 6 Pro';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../webfonts/fa-regular-400.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Font Awesome 6 Pro';
+  font-style: normal;
+  font-weight: 900;
+  src: url('../webfonts/fa-solid-900.woff2') format('woff2');
+  font-display: swap;
+}
+
+.fa-regular,
+.fa-solid {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  line-height: 1;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.fa-regular {
+  font-family: 'Font Awesome 6 Pro';
+  font-weight: 400;
+}
+
+.fa-solid {
+  font-family: 'Font Awesome 6 Pro';
+  font-weight: 900;
+}
+
+.fa-envelope::before {
+  content: '\f0e0';
+}
+
+.fa-triangle-exclamation::before {
+  content: '\f071';
+}
+
+.fa-water-rise::before {
+  content: '\f775';
+}
+
+.fa-seedling::before {
+  content: '\f4d8';
+}
+
+.fa-wind::before {
+  content: '\f72e';
+}
+
+.fa-wave-square::before {
+  content: '\f83e';
+}
+
+.fa-vial::before {
+  content: '\f492';
+}
+
+.fa-temperature-half::before {
+  content: '\f2c9';
+}
+
+.fa-droplet::before {
+  content: '\f043';
+}
+
+.fa-water-arrow-down::before {
+  content: '\f774';
+}
+
+.fa-bolt::before {
+  content: '\f0e7';
+}
