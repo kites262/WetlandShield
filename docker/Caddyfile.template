@@ -1,0 +1,24 @@
+{
+__GLOBAL_OPTIONS__
+}
+
+__SITE_ADDRESS__ {
+  encode zstd gzip
+
+  @api {
+    path __API_PREFIX__
+    path __API_PREFIX__/*
+  }
+
+  route {
+    handle @api {
+      reverse_proxy 127.0.0.1:3000
+    }
+
+    handle {
+      root * /srv/web
+      try_files {path} /index.html
+      file_server
+    }
+  }
+}

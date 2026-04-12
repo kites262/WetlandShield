@@ -132,6 +132,58 @@ WetlandShield 关注的并不是单一监测点或单一传感器数据，而是
 - 系统支持使用演示数据完成展示，也可平滑接入正式监测数据源。
 - 智能建议能力兼容 OpenAI 风格接口，可接入具备相同协议的模型服务。
 
+## 🐳 Docker 部署
+
+项目提供了面向生产部署的单镜像方案：
+
+- 前端在构建阶段生成静态文件
+- 后端在构建阶段编译为运行产物
+- Caddy 作为统一网关，对外提供静态资源服务与 API 转发
+- 可按需启用自动 HTTPS，也可仅使用 HTTP
+
+### 构建镜像
+
+```bash
+docker build \
+  --build-arg API_PREFIX=/api \
+  --build-arg CADDY_SITE_ADDRESS=:80 \
+  --build-arg CADDY_ENABLE_HTTPS=false \
+  -t wetland-shield:latest .
+```
+
+### 启动容器
+
+```bash
+docker run -d \
+  --name wetland-shield \
+  -p 80:80 \
+  -p 443:443 \
+  -e AI_BASE_URL=https://api.deepseek.com/v1 \
+  -e AI_API_KEY=your_api_key \
+  -e AI_MODEL=deepseek-chat \
+  wetland-shield:latest
+```
+
+### 构建参数说明
+
+- `API_PREFIX`
+  同时作用于前端和后端，默认值为 `/api`。前端静态资源会将它烧录为请求前缀，Caddy 和后端也会使用同一路径。
+- `CADDY_SITE_ADDRESS`
+  Caddy 对外监听的站点地址。可使用 `:80`、`example.com`、`example.com:443` 等形式。
+- `CADDY_ENABLE_HTTPS`
+  是否启用 Caddy 自动 HTTPS。设为 `true` 时，且 `CADDY_SITE_ADDRESS` 为可公网访问的域名，Caddy 会自动申请证书；设为 `false` 时，将关闭自动 HTTPS。
+
+### 运行时环境变量
+
+- `AI_BASE_URL`
+  上游 OpenAI 兼容模型服务地址。
+- `AI_API_KEY`
+  上游模型服务的访问密钥。
+- `AI_MODEL`
+  默认使用的模型名称。
+- `AI_TIMEOUT_MS`
+  上游请求超时时间，单位毫秒，可选。
+
 ## 💡 项目价值
 
 - 提升湿地监测结果的可读性与可操作性
