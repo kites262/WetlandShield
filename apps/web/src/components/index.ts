@@ -1,0 +1,7 @@
+export { default as WidgetPanel01 } from './WetlandChart.vue'
+export { default as WidgetPanel02 } from './WetlandChart1.vue'
+export { default as WidgetPanel03 } from './WetlandChart2.vue'
+export { default as WidgetPanel04 } from './WetlandChart3.vue'
+export { default as WidgetPanel05 } from './WetlandChart4.vue'
+export { default as WidgetPanel06 } from './WetlandChart5.vue'
+export { default as WidgetPanel07 } from './WetlandChart6.vue'

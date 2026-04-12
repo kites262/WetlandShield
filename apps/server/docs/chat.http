@@ -1,0 +1,41 @@
+@baseUrl = http://localhost:3000/api
+
+### Chat completion
+POST {{baseUrl}}/chat/completions
+Content-Type: application/json
+
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一名湿地生态监测研判助手。现在你正在分析当前断面的湿地生态监测数据，数据包括水质、植被覆盖率、生物多样性等指标。当前数据源配置: {\"dataSource\": \"MockDataSource\", \"parameters\": {\"location\": \"湿地断面A\", \"timeRange\": \"2024-06-01至2024-06-30\"}}。请根据这些数据分析当前断面的生态状况，并模拟给出短时风险处置建议。"
+    },
+    {
+      "role": "user",
+      "content": "请给出当前断面的短时风险处置建议。"
+    }
+  ],
+  "temperature": 0.6
+}
+
+### Chat completion stream
+POST {{baseUrl}}/chat/completions
+Content-Type: application/json
+Accept: text/event-stream
+
+{
+  "model": "deepseek-chat",
+  "stream": true,
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一名湿地生态监测研判助手。"
+    },
+    {
+      "role": "user",
+      "content": "请分阶段输出当前断面的短时风险处置建议。"
+    }
+  ],
+  "temperature": 0.6
+}

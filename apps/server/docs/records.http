@@ -1,0 +1,21 @@
+@baseUrl = http://localhost:3000/api
+
+### Get current records snapshot
+GET {{baseUrl}}/records/current
+
+### Confirm abnormal
+POST {{baseUrl}}/records/confirm-abnormal
+Content-Type: application/json
+
+{
+  "region": "北侧入湖口",
+  "confirmer": "巡检员A12"
+}
+
+### Record action
+POST {{baseUrl}}/records/record-action
+Content-Type: application/json
+
+{
+  "measures": "已加密采样并通知上游闸站复核来水情况。"
+}
