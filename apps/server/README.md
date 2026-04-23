@@ -142,7 +142,8 @@ AI_TIMEOUT_MS=30000
 - `API_PREFIX`：全局 API 前缀，默认 `/api`
 - `AI_BASE_URL`：上游 OpenAI 兼容服务地址
 - `AI_API_KEY`：上游服务鉴权密钥
-- `AI_MODEL`：默认模型名
+- `AI_MODEL`：可选默认模型名；当请求体未传 `model` 时使用。若客户端传入
+  `model`，服务会保留客户端选择，便于 Codex 等 Agent 使用支持工具调用的模型。
 - `AI_TIMEOUT_MS`：请求超时时间，单位毫秒
 
 ## 当前接口

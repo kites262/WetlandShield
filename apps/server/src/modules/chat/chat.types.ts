@@ -1,4 +1,10 @@
-export type ChatMessageRole = 'system' | 'user' | 'assistant' | 'tool';
+export type ChatMessageRole =
+  | 'developer'
+  | 'system'
+  | 'user'
+  | 'assistant'
+  | 'tool'
+  | 'function';
 
 export type ChatMessageContentPart = {
   type?: string;
@@ -6,12 +12,44 @@ export type ChatMessageContentPart = {
   [key: string]: unknown;
 };
 
-export type ChatMessageContent = string | ChatMessageContentPart[];
+export type ChatMessageContent = string | ChatMessageContentPart[] | null;
+
+export type ChatToolCall = {
+  id?: string;
+  type?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type ChatTool = {
+  type: string;
+  function?: {
+    name?: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+    strict?: boolean;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type ChatToolChoice =
+  | 'none'
+  | 'auto'
+  | 'required'
+  | Record<string, unknown>;
 
 export interface ChatMessage {
   role: ChatMessageRole | string;
-  content: ChatMessageContent;
+  content?: ChatMessageContent;
   name?: string;
+  tool_call_id?: string;
+  tool_calls?: ChatToolCall[];
+  function_call?: Record<string, unknown>;
 }
 
 export interface ChatCompletionRequest {
@@ -24,6 +62,12 @@ export interface ChatCompletionRequest {
   frequency_penalty?: number;
   stream?: boolean;
   stream_options?: Record<string, unknown>;
+  stop?: string | string[];
+  max_completion_tokens?: number;
+  response_format?: Record<string, unknown>;
+  tools?: ChatTool[];
+  tool_choice?: ChatToolChoice;
+  parallel_tool_calls?: boolean;
   user?: string;
 }
 

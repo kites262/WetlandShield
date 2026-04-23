@@ -4,6 +4,7 @@ import {
   GatewayTimeoutException,
   HttpException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 
@@ -29,6 +30,89 @@ type StreamingResponse = {
   off: (event: string, listener: () => void) => StreamingResponse;
 };
 
+const sensitiveKeyPattern =
+  /authorization|api[-_ ]?key|(^|[-_ ])token($|[-_ ])|secret|password|credential|session|cookie/i;
+
+function redactSecretsInText(text: string) {
+  return text
+    .replace(/Bearer\s+[^\s,}]+/gi, 'Bearer [REDACTED]')
+    .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-[REDACTED]')
+    .replace(
+      /(api[-_ ]?key["']?\s*[:=]\s*["']?)[^"',\s}]+/gi,
+      '$1[REDACTED]',
+    )
+    .replace(
+      /(token["']?\s*[:=]\s*["']?)[^"',\s}]+/gi,
+      '$1[REDACTED]',
+    );
+}
+
+function sanitizeDebugValue(value: unknown, key = ''): unknown {
+  if (sensitiveKeyPattern.test(key)) {
+    return '[REDACTED]';
+  }
+
+  if (typeof value === 'string') {
+    return redactSecretsInText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDebugValue(item));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeDebugValue(entryValue, entryKey),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+function headersToRecord(headers: Headers) {
+  const result: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    result[key] = value;
+  });
+  return result;
+}
+
+function formatDebugPayload(payload: unknown) {
+  try {
+    return JSON.stringify(sanitizeDebugValue(payload), null, 2);
+  } catch (error) {
+    return JSON.stringify({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to format debug payload',
+    });
+  }
+}
+
+function createDebugRequestId() {
+  return `${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -36,9 +120,118 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function isContentPartArray(value: unknown): value is ChatMessageContentPart[] {
   return (
     Array.isArray(value) &&
-    value.length > 0 &&
     value.every((item) => isPlainObject(item))
   );
+}
+
+function isMessageContent(
+  value: unknown,
+): value is ChatMessage['content'] {
+  return (
+    typeof value === 'string' ||
+    value === null ||
+    isContentPartArray(value)
+  );
+}
+
+function hasMessageContent(value: unknown) {
+  return typeof value === 'string' || isContentPartArray(value);
+}
+
+function validateRequiredContent(
+  message: Record<string, unknown>,
+  index: number,
+) {
+  if (!Object.prototype.hasOwnProperty.call(message, 'content')) {
+    throw new BadRequestException(`messages[${index}].content is required`);
+  }
+
+  if (!isMessageContent(message.content) || message.content === null) {
+    throw new BadRequestException(
+      `messages[${index}].content must be a string or content part array`,
+    );
+  }
+}
+
+function validateOptionalContent(
+  message: Record<string, unknown>,
+  index: number,
+) {
+  if (
+    !Object.prototype.hasOwnProperty.call(message, 'content') ||
+    message.content === undefined
+  ) {
+    return false;
+  }
+
+  if (!isMessageContent(message.content)) {
+    throw new BadRequestException(
+      `messages[${index}].content must be a string, content part array, or null`,
+    );
+  }
+
+  return hasMessageContent(message.content);
+}
+
+function validateToolCalls(message: Record<string, unknown>, index: number) {
+  if (
+    !Object.prototype.hasOwnProperty.call(message, 'tool_calls') ||
+    message.tool_calls === undefined
+  ) {
+    return false;
+  }
+
+  if (
+    !Array.isArray(message.tool_calls) ||
+    !message.tool_calls.every((toolCall) => isPlainObject(toolCall))
+  ) {
+    throw new BadRequestException(
+      `messages[${index}].tool_calls must be an array of objects`,
+    );
+  }
+
+  return message.tool_calls.length > 0;
+}
+
+function validateToolMessage(message: Record<string, unknown>, index: number) {
+  validateRequiredContent(message, index);
+
+  if (
+    typeof message.tool_call_id !== 'string' ||
+    !message.tool_call_id.trim()
+  ) {
+    throw new BadRequestException(
+      `messages[${index}].tool_call_id is required for tool messages`,
+    );
+  }
+}
+
+function validateAssistantMessage(
+  message: Record<string, unknown>,
+  index: number,
+) {
+  const hasContent = validateOptionalContent(message, index);
+  const hasToolCalls = validateToolCalls(message, index);
+  const hasFunctionCall = isPlainObject(message.function_call);
+
+  if (!hasContent && !hasToolCalls && !hasFunctionCall) {
+    throw new BadRequestException(
+      `messages[${index}] must include content, tool_calls, or function_call`,
+    );
+  }
+}
+
+function validateToolDefinitions(body: ChatCompletionRequestDto) {
+  if (body.tools === undefined) {
+    return;
+  }
+
+  if (
+    !Array.isArray(body.tools) ||
+    !body.tools.every((tool) => isPlainObject(tool))
+  ) {
+    throw new BadRequestException('tools must be an array of objects');
+  }
 }
 
 function extractErrorMessage(
@@ -99,20 +292,23 @@ function validateMessage(message: unknown, index: number): asserts message is Ch
     throw new BadRequestException(`messages[${index}] must be an object`);
   }
 
-  if (typeof message.role !== 'string' || !message.role.trim()) {
+  const role = typeof message.role === 'string' ? message.role.trim() : '';
+
+  if (!role) {
     throw new BadRequestException(`messages[${index}].role is required`);
   }
 
-  const { content } = message;
-  const isValidContent =
-    (typeof content === 'string' && content.trim().length > 0) ||
-    isContentPartArray(content);
-
-  if (!isValidContent) {
-    throw new BadRequestException(
-      `messages[${index}].content must be a non-empty string or content part array`,
-    );
+  if (role === 'assistant') {
+    validateAssistantMessage(message, index);
+    return;
   }
+
+  if (role === 'tool') {
+    validateToolMessage(message, index);
+    return;
+  }
+
+  validateRequiredContent(message, index);
 }
 
 function validateRequestBody(
@@ -127,10 +323,21 @@ function validateRequestBody(
   }
 
   body.messages.forEach((message, index) => validateMessage(message, index));
+  validateToolDefinitions(body);
 }
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
+  private logAiDebug(event: string, payload: unknown) {
+    if (!config.aiDebug) {
+      return;
+    }
+
+    this.logger.log(`[AI_DEBUG] ${event}\n${formatDebugPayload(payload)}`);
+  }
+
   private prepareRequestBody(
     body: ChatCompletionRequestDto,
     stream = false,
@@ -146,11 +353,20 @@ export class ChatService {
       });
     }
 
-    const model = config.aiModel || body.model?.trim();
+    const requestModel = typeof body.model === 'string' ? body.model.trim() : '';
+    const model = requestModel || config.aiModel;
 
     if (!model) {
       throw new BadRequestException('model is required');
     }
+
+    this.logAiDebug('model resolved', {
+      requestModel: requestModel || null,
+      defaultModel: config.aiModel || null,
+      resolvedModel: model,
+      usedDefaultModel: !requestModel,
+      stream,
+    });
 
     return {
       ...body,
@@ -169,18 +385,49 @@ export class ChatService {
   private async requestUpstream(
     body: ChatCompletionRequestDto,
     signal: AbortSignal,
+    requestId: string,
   ): Promise<Response> {
+    const url = `${config.aiBaseUrl}/chat/completions`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.aiApiKey}`,
+    };
+    const startedAt = Date.now();
+
+    this.logAiDebug('upstream request', {
+      requestId,
+      method: 'POST',
+      url,
+      timeoutMs: config.aiTimeoutMs,
+      headers,
+      body,
+    });
+
     try {
-      return await fetch(`${config.aiBaseUrl}/chat/completions`, {
+      const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.aiApiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
         signal,
       });
+
+      this.logAiDebug('upstream response headers', {
+        requestId,
+        elapsedMs: Date.now() - startedAt,
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: headersToRecord(response.headers),
+      });
+
+      return response;
     } catch (error) {
+      this.logAiDebug('upstream request error', {
+        requestId,
+        elapsedMs: Date.now() - startedAt,
+        error: serializeError(error),
+      });
+
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw new GatewayTimeoutException({
           error: {
@@ -202,9 +449,20 @@ export class ChatService {
 
   private async parseJsonResponse(
     response: Response,
+    requestId: string,
   ): Promise<ChatCompletionResponse> {
     const rawText = await response.text();
     const payload = parseJsonPayload(rawText);
+
+    this.logAiDebug('upstream response body', {
+      requestId,
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      headers: headersToRecord(response.headers),
+      rawText,
+      parsed: payload,
+    });
 
     if (!response.ok) {
       throw new HttpException(
@@ -270,13 +528,15 @@ export class ChatService {
   async createCompletion(
     body: ChatCompletionRequestDto,
   ): Promise<ChatCompletionResponse> {
+    const requestId = createDebugRequestId();
     const requestBody = this.prepareRequestBody(body, false);
     const response = await this.requestUpstream(
       requestBody,
       this.createRequestSignal(),
+      requestId,
     );
 
-    return this.parseJsonResponse(response);
+    return this.parseJsonResponse(response, requestId);
   }
 
   async streamCompletion(
@@ -291,6 +551,7 @@ export class ChatService {
     response.on('close', handleClientClose);
 
     try {
+      const requestId = createDebugRequestId();
       const requestBody = this.prepareRequestBody(body, true);
       let upstreamResponse: Response;
 
@@ -298,9 +559,13 @@ export class ChatService {
         upstreamResponse = await this.requestUpstream(
           requestBody,
           this.createRequestSignal([clientAbortController.signal]),
+          requestId,
         );
       } catch (error) {
         if (clientAbortController.signal.aborted) {
+          this.logAiDebug('stream aborted before upstream response', {
+            requestId,
+          });
           return;
         }
 
@@ -308,7 +573,7 @@ export class ChatService {
       }
 
       if (!upstreamResponse.ok) {
-        await this.parseJsonResponse(upstreamResponse);
+        await this.parseJsonResponse(upstreamResponse, requestId);
         return;
       }
 
@@ -323,6 +588,9 @@ export class ChatService {
       this.applyStreamHeaders(upstreamResponse, response);
 
       const reader = upstreamResponse.body.getReader();
+      const decoder = config.aiDebug ? new TextDecoder() : null;
+      let chunkIndex = 0;
+      let totalBytes = 0;
 
       try {
         while (!clientAbortController.signal.aborted) {
@@ -336,11 +604,28 @@ export class ChatService {
             continue;
           }
 
+          chunkIndex += 1;
+          totalBytes += value.length;
+
+          this.logAiDebug('upstream stream chunk', {
+            requestId,
+            chunkIndex,
+            byteLength: value.length,
+            text: decoder?.decode(value, { stream: true }),
+          });
+
           if (!response.write(Buffer.from(value))) {
             await this.waitForDrain(response);
           }
         }
       } catch (error) {
+        this.logAiDebug('upstream stream error', {
+          requestId,
+          chunkIndex,
+          totalBytes,
+          error: serializeError(error),
+        });
+
         if (!clientAbortController.signal.aborted) {
           throw new BadGatewayException({
             error: {
@@ -352,6 +637,21 @@ export class ChatService {
           });
         }
       } finally {
+        const trailingText = decoder?.decode();
+        if (trailingText) {
+          this.logAiDebug('upstream stream trailing text', {
+            requestId,
+            text: trailingText,
+          });
+        }
+
+        this.logAiDebug('upstream stream complete', {
+          requestId,
+          chunkCount: chunkIndex,
+          totalBytes,
+          clientAborted: clientAbortController.signal.aborted,
+        });
+
         reader.releaseLock();
       }
     } finally {

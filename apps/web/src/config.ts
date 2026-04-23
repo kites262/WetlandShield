@@ -35,6 +35,7 @@ export function createConfig(env: EnvSource): Config {
 }
 
 const runtimeEnv =
-  ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {});
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
+    .env ?? {};
 
 export const config = createConfig(runtimeEnv);

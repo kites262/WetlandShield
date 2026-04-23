@@ -29,7 +29,10 @@ AI provider.
 - Default global prefix is `/api`, so the runtime path is
   `/api/chat/completions`.
 - `stream: true` is supported and will proxy upstream SSE chunks directly.
-- If `AI_MODEL` is configured, it will override the incoming `model`.
+- `tools`, `tool_choice`, `parallel_tool_calls`, `tool_calls`, and
+  `tool_call_id` are accepted and proxied for OpenAI-compatible tool use.
+- If `AI_MODEL` is configured, it is used only when the incoming request omits
+  `model`; client-provided model names are otherwise preserved.
 
 ## POST `/records/confirm-abnormal`
 

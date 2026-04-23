@@ -11,6 +11,7 @@ export type Config = {
   aiApiKey: string;
   aiModel: string;
   aiTimeoutMs: number;
+  aiDebug: boolean;
 };
 
 function loadServerEnv() {
@@ -28,6 +29,24 @@ function parseNumber(value: string | undefined, fallback: number) {
 
 function parseString(value: string | undefined, fallback = '') {
   return value?.trim() || fallback;
+}
+
+function parseBoolean(value: string | undefined, fallback = false) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
 }
 
 function normalizeApiPrefix(value: string | undefined) {
@@ -50,8 +69,9 @@ export function createConfig(env: EnvSource): Config {
     apiPrefix: normalizeApiPrefix(env.API_PREFIX ?? '/api'),
     aiBaseUrl: normalizeBaseUrl(env.AI_BASE_URL),
     aiApiKey: parseString(env.AI_API_KEY),
-    aiModel: parseString(env.AI_MODEL, 'deepseek-chat'),
+    aiModel: parseString(env.AI_MODEL),
     aiTimeoutMs: parseNumber(env.AI_TIMEOUT_MS, 30000),
+    aiDebug: parseBoolean(env.AI_DEBUG),
   };
 }
 

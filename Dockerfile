@@ -46,7 +46,9 @@ ARG CADDY_SITE_ADDRESS=:80
 ARG CADDY_ENABLE_HTTPS=false
 ARG API_PREFIX=/api
 
-RUN apk add --no-cache nodejs
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache nodejs
 
 WORKDIR /srv
 

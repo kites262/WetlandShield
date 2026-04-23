@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "build": "pnpm -r build",
+    "dev": "pnpm --filter @wetland-shield/server --filter @wetland-shield/web --parallel --stream dev",
     "dev:server": "pnpm --filter @wetland-shield/server dev",
     "dev:web": "pnpm --filter @wetland-shield/web dev",
     "typecheck": "pnpm -r typecheck"
